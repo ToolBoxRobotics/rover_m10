@@ -1,0 +1,14 @@
+<!-- rover_bringup/launch/full_system.launch -->
+<launch>
+  <include file="$(find rover_bringup)/launch/base_bringup.launch" />
+  <include file="$(find rover_bringup)/launch/arm_bringup.launch" />
+
+  <!-- Kinect driver -->
+  <include file="$(find openni2_launch)/launch/openni2.launch" />
+
+  <!-- Vision/autonomy node -->
+  <node pkg="rover_base" type="vision_node.py" name="vision_node" output="screen" />
+
+  <!-- Teleop (for testing) -->
+  <node pkg="teleop_twist_keyboard" type="teleop_twist_keyboard.py" name="teleop" output="screen" />
+</launch>
