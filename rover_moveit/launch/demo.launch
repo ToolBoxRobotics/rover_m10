@@ -1,0 +1,7 @@
+<launch>
+  <include file="$(find rover_moveit)/launch/planning_context.launch"/>
+  <include file="$(find rover_moveit)/launch/move_group.launch"/>
+
+  <node pkg="rviz" type="rviz" name="moveit_rviz"
+        args="-d $(find rover_moveit)/launch/moveit.rviz"/>
+</launch>
