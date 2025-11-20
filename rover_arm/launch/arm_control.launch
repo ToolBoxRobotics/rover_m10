@@ -1,0 +1,6 @@
+<launch>
+  <rosparam file="$(find rover_arm)/config/arm_controllers.yaml" command="load"/>
+
+  <node name="controller_spawner" pkg="controller_manager" type="spawner"
+        args="arm_controller" />
+</launch>
