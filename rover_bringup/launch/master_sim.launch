@@ -1,0 +1,85 @@
+<launch>
+
+  <!-- =============================
+       1. LOAD ROBOT DESCRIPTION
+       ============================= -->
+  <param name="robot_description"
+         command="$(find xacro)/xacro $(find rover_description)/urdf/rover.urdf.xacro"/>
+
+  <node pkg="robot_state_publisher" type="robot_state_publisher" name="rsp" output="screen" />
+  <node pkg="joint_state_publisher" type="joint_state_publisher" name="jsp" output="screen" />
+
+
+  <!-- =============================
+       2. START GAZEBO SIMULATION
+       ============================= -->
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="world_name" value="$(find rover_simulation)/worlds/rover_world.world"/>
+    <arg name="paused" value="false"/>
+    <arg name="use_sim_time" value="true"/>
+    <arg name="gui" value="true"/>
+  </include>
+
+  <node pkg="gazebo_ros" type="spawn_model" name="spawn_rover" output="screen"
+        args="-urdf -param robot_description -model rover"/>
+
+
+  <!-- =============================
+       3. SIMULATED SENSORS PIPELINE
+       ============================= -->
+
+  <!-- Depth → Pointcloud -->
+  <include file="$(find rover_perception)/launch/depth_pipeline.launch"/>
+
+  <!-- Depth → Laserscan for costmaps -->
+  <include file="$(find rover_perception)/launch/depth_to_scan.launch"/>
+
+
+  <!-- =============================
+       4. ACKERMANN KINEMATICS NODE
+       ============================= -->
+  <node pkg="rover_base" type="rover_kinematics_ackermann.py"
+        name="ackermann_kinematics" output="screen">
+    <param name="wheelbase" value="0.50"/>
+    <param name="track_width" value="0.40"/>
+    <param name="max_speed" value="1.0"/>
+    <param name="max_steer_deg" value="35"/>
+  </node>
+
+
+  <!-- =============================
+       5. STATE ESTIMATION (EKF)
+       ============================= -->
+  <include file="$(find rover_bringup)/launch/state_estimation.launch"/>
+
+
+  <!-- =============================
+       6. NAVIGATION STACK (Nav2-style)
+       ============================= -->
+  <include file="$(find rover_navigation)/launch/navigation.launch"/>
+
+
+  <!-- =============================
+       7. ARM CONTROL + IK
+       ============================= -->
+
+  <!-- ros_control arm controllers -->
+  <include file="$(find rover_arm)/launch/arm_control.launch" />
+
+  <!-- Inverse kinematics node -->
+  <node pkg="rover_arm" type="arm_ik_node.py" name="arm_ik" output="screen"/>
+
+
+  <!-- =============================
+       8. AUTONOMY (Behavior Tree)
+       ============================= -->
+  <node pkg="rover_navigation" type="bt_autonomy.py" name="bt_autonomy" output="screen"/>
+
+
+  <!-- =============================
+       9. RVIZ VISUALIZATION
+       ============================= -->
+  <node pkg="rviz" type="rviz" name="rviz"
+        args="-d $(find rover_description)/rviz/rover.rviz" />
+
+</launch>
