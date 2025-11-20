@@ -1,0 +1,167 @@
+<?xml version="1.0"?>
+<robot name="six_wheel_rover" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- ==================== GLOBAL PROPERTIES ===================== -->
+  <xacro:property name="wheel_radius" value="0.07" />       <!-- 7 cm -->
+  <xacro:property name="wheel_width"  value="0.04" />
+  <xacro:property name="track_width"  value="0.40" />        <!-- L-R -->
+  <xacro:property name="wheelbase"    value="0.50" />        <!-- F-R -->
+  <xacro:property name="body_length"  value="0.70" />
+  <xacro:property name="body_width"   value="0.45" />
+  <xacro:property name="body_height"  value="0.20" />
+
+  <!-- ==================== BASE LINK ===================== -->
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <box size="${body_length} ${body_width} ${body_height}"/>
+      </geometry>
+      <origin xyz="0 0 ${body_height/2}" rpy="0 0 0"/>
+      <material name="grey"><color rgba="0.5 0.5 0.5 1"/></material>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="${body_length} ${body_width} ${body_height}"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <!-- ==================== WHEELS ===================== -->
+  <xacro:macro name="wheel" params="name x y">
+    <link name="${name}_link">
+      <visual>
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+        </geometry>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <material name="black"><color rgba="0 0 0 1"/></material>
+      </visual>
+      <collision>
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <!-- Steering joint for front and rear wheels -->
+    <joint name="${name}_steer_joint" type="revolute">
+      <parent link="base_link"/>
+      <child  link="${name}_steer_link"/>
+      <origin xyz="${x} ${y} 0.0" rpy="0 0 0"/>
+      <axis xyz="0 0 1"/>
+      <limit lower="${-45*pi/180}" upper="${45*pi/180}" effort="30" velocity="1.0"/>
+    </joint>
+
+    <link name="${name}_steer_link"/>
+
+    <!-- Wheel rotate joint -->
+    <joint name="${name}_wheel_joint" type="continuous">
+      <parent link="${name}_steer_link"/>
+      <child link="${name}_link"/>
+      <origin xyz="0 0 -${wheel_radius}" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+    </joint>
+  </xacro:macro>
+
+  <!-- Instantiate wheels -->
+  <!-- Front wheels -->
+  <xacro:wheel name="wheel_fl" x="${ wheelbase/2}" y="${ track_width/2}"/>
+  <xacro:wheel name="wheel_fr" x="${ wheelbase/2}" y="${-track_width/2}"/>
+
+  <!-- Middle wheels (no steering) -->
+  <xacro:macro name="fixed_wheel" params="name x y">
+    <link name="${name}_link">
+      <visual>
+        <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
+        <material name="black"><color rgba="0 0 0 1"/></material>
+      </visual>
+    </link>
+    <joint name="${name}_joint" type="continuous">
+      <origin xyz="${x} ${y} 0" rpy="0 0 0"/>
+      <parent link="base_link"/>
+      <child link="${name}_link"/>
+      <axis xyz="0 1 0"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:fixed_wheel name="wheel_fm" x="${ wheelbase/2}" y="0"/>
+  <xacro:fixed_wheel name="wheel_rm" x="${-wheelbase/2}" y="0"/>
+
+  <!-- Rear wheels -->
+  <xacro:wheel name="wheel_rl" x="${-wheelbase/2}" y="${ track_width/2}"/>
+  <xacro:wheel name="wheel_rr" x="${-wheelbase/2}" y="${-track_width/2}"/>
+
+  <!-- ==================== SENSORS ===================== -->
+
+  <!-- IMU -->
+  <link name="imu_link"/>
+  <joint name="imu_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="imu_link"/>
+    <origin xyz="0 0 ${body_height/2}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- GPS -->
+  <link name="gps_link"/>
+  <joint name="gps_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="gps_link"/>
+    <origin xyz="0 0 ${body_height + 0.05}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Kinect -->
+  <link name="camera_link"/>
+  <joint name="camera_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="camera_link"/>
+    <origin xyz="${body_length/2} 0 ${body_height}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ==================== ARM ===================== -->
+  <link name="arm_base_link"/>
+  <joint name="arm_base_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="arm_base_link"/>
+    <origin xyz="0.0 0.20 ${body_height}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- 5 arm joints -->
+  <xacro:macro name="arm_joint" params="name parent child x y z axis_x axis_y axis_z">
+    <joint name="${name}" type="revolute">
+      <parent link="${parent}"/>
+      <child  link="${child}"/>
+      <origin xyz="${x} ${y} ${z}" rpy="0 0 0"/>
+      <axis xyz="${axis_x} ${axis_y} ${axis_z}"/>
+      <limit lower="-3.14" upper="3.14" effort="10" velocity="1"/>
+    </joint>
+  </xacro:macro>
+
+  <link name="joint_1_link"/>
+  <xacro:arm_joint name="joint_1" parent="arm_base_link" child="joint_1_link"
+       x="0" y="0" z="0.05" axis_x="0" axis_y="0" axis_z="1"/>
+
+  <link name="joint_2_link"/>
+  <xacro:arm_joint name="joint_2" parent="joint_1_link" child="joint_2_link"
+       x="0.1" y="0" z="0" axis_x="0" axis_y="1" axis_z="0"/>
+
+  <link name="joint_3_link"/>
+  <xacro:arm_joint name="joint_3" parent="joint_2_link" child="joint_3_link"
+       x="0.1" y="0" z="0" axis_x="0" axis_y="1" axis_z="0"/>
+
+  <link name="joint_4_link"/>
+  <xacro:arm_joint name="joint_4" parent="joint_3_link" child="joint_4_link"
+       x="0.1" y="0" z="0" axis_x="1" axis_y="0" axis_z="0"/>
+
+  <link name="joint_5_link"/>
+  <xacro:arm_joint name="joint_5" parent="joint_4_link" child="joint_5_link"
+       x="0.1" y="0" z="0" axis_x="1" axis_y="0" axis_z="0"/>
+
+  <link name="arm_tool_link"/>
+  <joint name="tool_joint" type="fixed">
+    <parent link="joint_5_link"/>
+    <child  link="arm_tool_link"/>
+    <origin xyz="0.05 0 0" rpy="0 0 0"/>
+  </joint>
+
+</robot>
