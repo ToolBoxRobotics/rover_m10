@@ -1,0 +1,18 @@
+<!-- rover_bringup/launch/base_bringup.launch -->
+<launch>
+  <!-- Base Arduino -->
+  <node pkg="rosserial_python" type="serial_node.py" name="rover_base_serial">
+    <param name="port" value="/dev/ttyACM0" />
+    <param name="baud" value="57600" />
+  </node>
+
+  <!-- Kinematics -->
+  <node pkg="rover_base" type="rover_kinematics.py" name="rover_kinematics" output="screen" />
+
+  <!-- IMU & Power -->
+  <node pkg="rover_base" type="imu_node.py" name="imu_node" output="screen" />
+  <node pkg="rover_base" type="ina219_node.py" name="ina219_node" output="screen" />
+
+  <!-- GPS -->
+  <include file="$(find rover_bringup)/launch/gps.launch" />
+</launch>
