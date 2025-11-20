@@ -1,0 +1,153 @@
+<launch>
+  <!-- =============================
+       ARGS (tweak for your hardware)
+       ============================= -->
+  <!-- Serial ports for the two Megas -->
+  <arg name="base_serial_port" default="/dev/ttyACM0" />
+  <arg name="arm_serial_port"  default="/dev/ttyACM1" />
+
+  <!-- GPS port -->
+  <arg name="gps_port" default="/dev/ttyUSB0" />
+
+  <!-- Enable/disable subsystems quickly -->
+  <arg name="use_navigation" default="true" />
+  <arg name="use_autonomy"   default="true" />
+  <arg name="use_moveit"     default="false" /> <!-- optional, if you add MoveIt -->
+
+  <!-- Make sure hardware uses wall-clock time -->
+  <param name="use_sim_time" value="false"/>
+
+
+  <!-- =============================
+       1. ROBOT DESCRIPTION + TF
+       ============================= -->
+  <param name="robot_description"
+         command="$(find xacro)/xacro $(find rover_description)/urdf/rover.urdf.xacro"/>
+
+  <node pkg="robot_state_publisher" type="robot_state_publisher"
+        name="robot_state_publisher" output="screen" />
+
+  <!-- For wheels/arm you’ll get joint states from Arduinos / controllers.
+       This static publisher is mainly for testing; you can remove if you have
+       real joint_state sources everywhere. -->
+  <node pkg="joint_state_publisher" type="joint_state_publisher"
+        name="joint_state_publisher" output="screen" />
+
+
+  <!-- =============================
+       2. ARDUINO MEGAS (rosserial)
+       ============================= -->
+  <!-- Base Mega: encoders, PCA9685, DRI0002 motor drivers, steering servos -->
+  <node pkg="rosserial_python" type="serial_node.py"
+        name="rover_base_serial" output="screen">
+    <param name="port" value="$(arg base_serial_port)" />
+    <param name="baud" value="57600" />
+  </node>
+
+  <!-- Arm Mega: NEMA17 + A4988, limit switches, arm joint_states -->
+  <node pkg="rosserial_python" type="serial_node.py"
+        name="arm_serial" output="screen">
+    <param name="port" value="$(arg arm_serial_port)" />
+    <param name="baud" value="57600" />
+  </node>
+
+
+  <!-- =============================
+       3. I2C SENSORS (IMU + INA219)
+       ============================= -->
+  <!-- MPU6050 IMU via TCA9548A -->
+  <node pkg="rover_base" type="imu_node.py" name="imu_node" output="screen" />
+
+  <!-- INA219 voltage/current via TCA9548A -->
+  <node pkg="rover_base" type="ina219_node.py" name="ina219_node" output="screen" />
+
+
+  <!-- =============================
+       4. GPS (YB-MVV21-V1 via USB)
+       ============================= -->
+  <!-- Uses nmea_navsat_driver -->
+  <node pkg="nmea_navsat_driver" type="nmea_serial_driver"
+        name="gps_node" output="screen">
+    <param name="port" value="$(arg gps_port)" />
+    <param name="baud" value="9600" />
+    <param name="frame_id" value="gps_link" />
+  </node>
+
+
+  <!-- =============================
+       5. KINECT RGBD (OpenNI2/Freenect)
+       ============================= -->
+  <!-- For Kinect v1 you can use openni2_launch or freenect_launch;
+       adjust package/launch as needed. -->
+  <include file="$(find openni2_launch)/launch/openni2.launch">
+    <arg name="camera" value="camera" />
+  </include>
+
+
+  <!-- =============================
+       6. DEPTH → POINTCLOUD + LASERSCAN
+       ============================= -->
+  <!-- Nodelet pipelines from earlier steps -->
+  <include file="$(find rover_perception)/launch/depth_pipeline.launch" />
+  <include file="$(find rover_perception)/launch/depth_to_scan.launch" />
+
+
+  <!-- =============================
+       7. ACKERMANN KINEMATICS NODE
+       ============================= -->
+  <node pkg="rover_base" type="rover_kinematics_ackermann.py"
+        name="ackermann_kinematics" output="screen">
+    <param name="wheelbase" value="0.50"/>
+    <param name="track_width" value="0.40"/>
+    <param name="max_speed" value="1.0"/>
+    <param name="max_steer_deg" value="35"/>
+  </node>
+
+
+  <!-- =============================
+       8. STATE ESTIMATION (EKF)
+       ============================= -->
+  <!-- This should load ekf_odom + ekf_map configs we defined earlier -->
+  <include file="$(find rover_bringup)/launch/state_estimation.launch" />
+
+
+  <!-- =============================
+       9. NAVIGATION STACK
+       ============================= -->
+  <group if="$(arg use_navigation)">
+    <!-- Map server + AMCL + move_base (TEB, costmaps) -->
+    <include file="$(find rover_navigation)/launch/navigation.launch" />
+  </group>
+
+
+  <!-- =============================
+       10. ARM CONTROL + IK
+       ============================= -->
+  <!-- If you have ros_control for the arm on hardware, this launch will
+       start the arm_controller; otherwise the Mega drives the arm directly
+       and only publishes /arm/joint_states. -->
+  <include file="$(find rover_arm)/launch/arm_control.launch" />
+
+  <!-- KDL-based IK node: listens to /arm/target_pose and publishes a trajectory
+       to your arm controller -->
+  <node pkg="rover_arm" type="arm_ik_node.py" name="arm_ik" output="screen" />
+
+
+  <!-- =============================
+       11. AUTONOMY (Behavior Tree)
+       ============================= -->
+  <group if="$(arg use_autonomy)">
+    <!-- Behavior tree mission node (py_trees) that sends MoveBase goals -->
+    <node pkg="rover_navigation" type="bt_autonomy.py"
+          name="bt_autonomy" output="screen" />
+  </group>
+
+
+  <!-- =============================
+       12. OPTIONAL: MOVEIT (HIGH-LEVEL ARM PLANNING)
+       ============================= -->
+  <group if="$(arg use_moveit)">
+    <include file="$(find rover_moveit)/launch/demo.launch" />
+  </group>
+
+</launch>
